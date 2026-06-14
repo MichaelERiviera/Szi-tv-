@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document stores display information and roles.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User UID" },
+        "email": { "type": "string", "description": "Email address" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation time" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "Access level role" }
+      },
+      "required": ["id", "email", "displayName", "createdAt", "role"]
+    },
+    "Channel": {
+      "title": "Channel",
+      "description": "An IPTV channel item imported or created by admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique channel ID" },
+        "name": { "type": "string", "description": "Name of the channel" },
+        "url": { "type": "string", "description": "HLS stream URL (.m3u8)" },
+        "logo": { "type": "string", "description": "URL to the channel logo image" },
+        "category": { "type": "string", "description": "Category name for filtering" },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "views": { "type": "integer" },
+        "status": { "type": "string", "enum": ["active", "broken"] }
+      },
+      "required": ["id", "name", "url", "category", "addedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "A channel category representing a genre or region.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "A user's favorited channel association.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "channelId": { "type": "string" },
+        "addedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "channelId", "addedAt"]
+    },
+    "WatchHistory": {
+      "title": "WatchHistory",
+      "description": "User's viewing progress and recent viewing history.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "channelId": { "type": "string" },
+        "watchedAt": { "type": "string", "format": "date-time" },
+        "progress": { "type": "integer" },
+        "duration": { "type": "integer" }
+      },
+      "required": ["id", "userId", "channelId", "watchedAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Privileged administration authorization document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "addedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "addedAt"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Global IPTV platforms and validation settings.",
+      "type": "object",
+      "properties": {
+        "activeM3uUrl": { "type": "string" },
+        "autoValidateStreams": { "type": "boolean" },
+        "lastValidatedAt": { "type": "string" }
+      },
+      "required": ["activeM3uUrl", "autoValidateStreams"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Registry of platform users and access levels."
+    },
+    "/channels/{channelId}": {
+      "schema": { "$ref": "#/entities/Channel" },
+      "description": "Master guide of active IPTV streaming feeds."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Platform-wide IPTV categories."
+    },
+    "/users/{userId}/favorites/{favoriteId}": {
+      "schema": { "$ref": "#/entities/Favorite" },
+      "description": "A specific user's bookmarked IPTV channels."
+    },
+    "/users/{userId}/watchHistory/{historyId}": {
+      "schema": { "$ref": "#/entities/WatchHistory" },
+      "description": "Activity stream logs tracking media viewing sessions."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "List of platform admin user IDs."
+    },
+    "/system/settings": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "Global system configurations."
+    }
+  }
+}

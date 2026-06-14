@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE HARDENED GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.get('email', '') == "sajjab62q@gmail.com" && request.auth.token.get('email_verified', false) == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- ENTITY SPECIFIC SCHEMAS & VALIDATORS ---
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'displayName', 'createdAt', 'role']) &&
+             data.keys().size() == 5 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 128 &&
+             data.role is string && (data.role == 'user' || data.role == 'admin') &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidChannel(data) {
+      return data.keys().hasAll(['id', 'name', 'url', 'category', 'addedAt']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 256 &&
+             data.url is string && data.url.size() <= 2048 &&
+             data.category is string && data.category.size() <= 128 &&
+             data.addedAt is timestamp &&
+             (!('logo' in data) || data.logo is string) &&
+             (!('views' in data) || data.views is int) &&
+             (!('status' in data) || data.status is string);
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'name', 'slug']) &&
+             data.keys().size() == 3 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.slug is string && data.slug.size() <= 128;
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['id', 'userId', 'channelId', 'addedAt']) &&
+             data.keys().size() == 4 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.channelId is string && data.channelId.size() <= 128 &&
+             data.addedAt is timestamp;
+    }
+
+    function isValidWatchHistory(data) {
+      return data.keys().hasAll(['id', 'userId', 'channelId', 'watchedAt']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.channelId is string && data.channelId.size() <= 128 &&
+             data.watchedAt is timestamp &&
+             (!('progress' in data) || data.progress is int) &&
+             (!('duration' in data) || data.duration is int);
+    }
+
+
+    // --- COLLECTIONS SECURITY MATCH BLOCKS ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time && (
+        incoming().role == 'user' || (incoming().role == 'admin' && request.auth.token.get('email', '') == 'sajjab62q@gmail.com')
+      );
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (incoming().createdAt == existing().createdAt || incoming().createdAt == request.time) && (
+        incoming().role == existing().role || isAdmin() // Forbid privilege self-escalation
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 2. Channels Collection (Public catalog, Admin managed)
+    match /channels/{channelId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidChannel(incoming()) && incoming().addedAt == request.time;
+      allow update: if (isAdmin() && isValidChannel(incoming()) && (incoming().addedAt == existing().addedAt || incoming().addedAt == request.time)) || (
+        // Allow public visitors to increment views counter via specific action
+        isSignedIn() && isValidChannel(incoming()) && 
+        incoming().diff(existing()).affectedKeys().hasOnly(['views'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 3. Categories Collection (Public, Admin managed)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidCategory(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 4. Favorites Subcollection (User specific)
+    match /users/{userId}/favorites/{favoriteId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidFavorite(incoming()) && incoming().addedAt == request.time && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidFavorite(incoming()) && incoming().userId == request.auth.uid && (incoming().addedAt == existing().addedAt || incoming().addedAt == request.time);
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 5. WatchHistory Subcollection (User specific)
+    match /users/{userId}/watchHistory/{historyId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidWatchHistory(incoming()) && incoming().watchedAt == request.time && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidWatchHistory(incoming()) && incoming().userId == request.auth.uid && (incoming().watchedAt == existing().watchedAt || incoming().watchedAt == request.time);
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 6. Admins Collection (Break infinite recursion loop of isAdmin checks)
+    match /admins/{adminId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (request.auth.token.get('email', '') == "sajjab62q@gmail.com" && request.auth.token.get('email_verified', false) == true);
+      allow write: if isSignedIn() && (request.auth.token.get('email', '') == "sajjab62q@gmail.com" && request.auth.token.get('email_verified', false) == true);
+    }
+
+    // 7. System Settings
+    match /system/settings {
+      allow read: if true; // Let users check active system setting configs
+      allow write: if isAdmin();
+    }
+  }
+}

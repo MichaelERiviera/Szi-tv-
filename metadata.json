@@ -1,0 +1,6 @@
+{
+  "name": "Sazi TV",
+  "description": "IPTV Cyber Observatory - A futuristic space-inspired IPTV streaming platform with advanced playlist management, live telemetry data, category isolation, and secure user management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
