@@ -17,6 +17,7 @@ import {
   incrementChannelViews,
   seedChannels,
   deleteChannel,
+  deleteChannelsBatch,
   saveChannel,
   isSeedDisabledCheck,
   setSeedStatus,
@@ -138,23 +139,37 @@ function AppContent() {
 
   const handleDeleteChannel = async (chanId: string | string[]) => {
     if (Array.isArray(chanId)) {
-      if (chanId.length >= channels.length) {
-        localStorage.setItem("sazi_tv_purge_active", "true");
-        await setSeedStatus(true);
+      const isPurgingAll = chanId.length >= channels.length;
+      if (isPurgingAll) {
+         localStorage.setItem("sazi_tv_purge_active", "true");
+         setChannels([]);
+         if (activeChannel) {
+           setActiveChannel(null);
+         }
+         await setSeedStatus(true);
+      } else {
+         setChannels((prev) => prev.filter((c) => !chanId.includes(c.id)));
+         if (activeChannel && chanId.includes(activeChannel.id)) {
+           setActiveChannel(null);
+         }
       }
-      await Promise.all(chanId.map((id) => deleteChannel(id)));
-      if (activeChannel && chanId.includes(activeChannel.id)) {
-        setActiveChannel(null);
-      }
+      await deleteChannelsBatch(chanId);
     } else {
-      if (channels.length <= 1) {
-        localStorage.setItem("sazi_tv_purge_active", "true");
-        await setSeedStatus(true);
+      const isLastOne = channels.length <= 1;
+      if (isLastOne) {
+         localStorage.setItem("sazi_tv_purge_active", "true");
+         setChannels([]);
+         if (activeChannel?.id === chanId) {
+           setActiveChannel(null);
+         }
+         await setSeedStatus(true);
+      } else {
+         setChannels((prev) => prev.filter((c) => c.id !== chanId));
+         if (activeChannel?.id === chanId) {
+           setActiveChannel(null);
+         }
       }
       await deleteChannel(chanId);
-      if (activeChannel?.id === chanId) {
-        setActiveChannel(null);
-      }
     }
     await loadDatabaseState();
   };

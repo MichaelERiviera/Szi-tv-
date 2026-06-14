@@ -644,12 +644,7 @@ export default function AdminScreen({
 
   const handlePurgeAllChannels = async () => {
     if (channels.length === 0) return;
-    if (
-      !window.confirm(
-        `CRITICAL WARNING: Are you absolutely sure you want to delete ALL ${channels.length} channels currently registered in the database? This action is IRREVERSIBLE and cannot be undone.`
-      )
-    )
-      return;
+    if (!window.confirm("Are you sure you want to delete all channels immediately?")) return;
 
     try {
       const allIds = channels.map((c) => c.id);

@@ -12,6 +12,7 @@ import {
   limit,
   orderBy,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Channel, Category, Favorite, WatchHistory } from "../types";
@@ -76,6 +77,22 @@ export async function deleteChannel(channelId: string): Promise<void> {
     await deleteDoc(doc(db, "channels", channelId));
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `channels/${channelId}`);
+  }
+}
+
+export async function deleteChannelsBatch(channelIds: string[]): Promise<void> {
+  try {
+    const limitNum = 500;
+    for (let i = 0; i < channelIds.length; i += limitNum) {
+      const chunk = channelIds.slice(i, i + limitNum);
+      const batch = writeBatch(db);
+      chunk.forEach((id) => {
+        batch.delete(doc(db, "channels", id));
+      });
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, "channels/batch-delete");
   }
 }
 
