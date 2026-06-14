@@ -18,6 +18,8 @@ import {
   seedChannels,
   deleteChannel,
   saveChannel,
+  isSeedDisabledCheck,
+  setSeedStatus,
 } from "./utils/dbService";
 import { DEFAULT_CHANNELS } from "./utils/m3uParser";
 import { Channel, Favorite, WatchHistory } from "./types";
@@ -54,7 +56,10 @@ function AppContent() {
     setDataLoading(true);
     try {
       const dbChannels = await fetchChannels();
-      if (dbChannels.length === 0) {
+      const listDisabled = await isSeedDisabledCheck() || localStorage.getItem("sazi_tv_purge_active") === "true";
+      if (dbChannels.length === 0 && !listDisabled) {
+        // Automatically seed the database with defaults on first run so they are real persistent documents!
+        await seedChannels(DEFAULT_CHANNELS);
         setChannels(DEFAULT_CHANNELS);
       } else {
         setChannels(dbChannels);
@@ -125,14 +130,31 @@ function AppContent() {
   };
 
   const handleSeedCuratedList = async () => {
+    localStorage.removeItem("sazi_tv_purge_active");
+    await setSeedStatus(false);
     await seedChannels(DEFAULT_CHANNELS);
     await loadDatabaseState();
   };
 
-  const handleDeleteChannel = async (chanId: string) => {
-    await deleteChannel(chanId);
-    if (activeChannel?.id === chanId) {
-      setActiveChannel(null);
+  const handleDeleteChannel = async (chanId: string | string[]) => {
+    if (Array.isArray(chanId)) {
+      if (chanId.length >= channels.length) {
+        localStorage.setItem("sazi_tv_purge_active", "true");
+        await setSeedStatus(true);
+      }
+      await Promise.all(chanId.map((id) => deleteChannel(id)));
+      if (activeChannel && chanId.includes(activeChannel.id)) {
+        setActiveChannel(null);
+      }
+    } else {
+      if (channels.length <= 1) {
+        localStorage.setItem("sazi_tv_purge_active", "true");
+        await setSeedStatus(true);
+      }
+      await deleteChannel(chanId);
+      if (activeChannel?.id === chanId) {
+        setActiveChannel(null);
+      }
     }
     await loadDatabaseState();
   };

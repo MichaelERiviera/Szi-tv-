@@ -47,7 +47,7 @@ import { parseM3U } from "../../utils/m3uParser";
 interface AdminScreenProps {
   channels: Channel[];
   onAddChannel: (chan: Channel) => Promise<void>;
-  onDeleteChannel: (chanId: string) => Promise<void>;
+  onDeleteChannel: (chanId: string | string[]) => Promise<void>;
   onSeedDefaults: () => Promise<void>;
 }
 
@@ -632,16 +632,32 @@ export default function AdminScreen({
     if (selectedChannels.length === 0) return;
     if (!window.confirm(`Bulk ban & decommission ${selectedChannels.length} streams?`)) return;
 
-    let success = 0;
     try {
-      for (const id of selectedChannels) {
-        await onDeleteChannel(id);
-        success++;
-      }
+      const idsToDelete = [...selectedChannels];
+      await onDeleteChannel(idsToDelete);
       setSelectedChannels([]);
-      logEvent("warn", `Bulk deleted ${success} transmission beacons from catalog.`);
+      logEvent("warn", `Bulk deleted ${idsToDelete.length} transmission beacons from catalog.`);
     } catch (err: any) {
       logEvent("error", `Failed complete bulk deletion: ${err.message}`);
+    }
+  };
+
+  const handlePurgeAllChannels = async () => {
+    if (channels.length === 0) return;
+    if (
+      !window.confirm(
+        `CRITICAL WARNING: Are you absolutely sure you want to delete ALL ${channels.length} channels currently registered in the database? This action is IRREVERSIBLE and cannot be undone.`
+      )
+    )
+      return;
+
+    try {
+      const allIds = channels.map((c) => c.id);
+      await onDeleteChannel(allIds);
+      setSelectedChannels([]);
+      logEvent("warn", `COMPLETE PURGE: Cleaned out all ${allIds.length} channels from active database.`);
+    } catch (err: any) {
+      logEvent("error", `Failed complete system purge: ${err.message}`);
     }
   };
 
@@ -1133,9 +1149,21 @@ export default function AdminScreen({
                   {/* Controls Header */}
                   <div className="border-b border-slate-800/80 pb-4 space-y-3.5">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <h3 className="text-xs font-semibold font-mono text-slate-350 tracking-wider flex items-center gap-2 uppercase">
-                        <Sliders size={14} className="text-cyan-400" /> MASTER FEED FILTERING GUIDE
-                      </h3>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="text-xs font-semibold font-mono text-slate-350 tracking-wider flex items-center gap-2 uppercase">
+                          <Sliders size={14} className="text-cyan-400" /> MASTER FEED FILTERING GUIDE
+                        </h3>
+                        {channels.length > 0 && (
+                          <button
+                            id="btn-purge-all-channels"
+                            onClick={handlePurgeAllChannels}
+                            className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-rose-400 font-mono text-[10px] px-2.5 py-1 rounded transition-all font-bold flex items-center gap-1 uppercase"
+                            title="Completely purge all database channels at once"
+                          >
+                            <Trash size={12} /> Purge All ({channels.length})
+                          </button>
+                        )}
+                      </div>
                       
                       {/* Bulk actions dropdown */}
                       {selectedChannels.length > 0 && (

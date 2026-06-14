@@ -1,6 +1,7 @@
 import { useState, useMemo, ReactNode } from "react";
 import { Play, Search, TrendingUp, Sparkles, Tv, Star, Shield, Film, Flame, Volume2, Globe, Heart, Clock } from "lucide-react";
 import { Channel, Favorite } from "../../types";
+import FootballScoreboard from "../FootballScoreboard";
 
 interface HomeScreenProps {
   channels: Channel[];
@@ -335,6 +336,11 @@ export default function HomeScreen({
         </div>
       ) : (
         <>
+          {/* Live Football Scoreboard Component */}
+          <div className="mb-8">
+            <FootballScoreboard />
+          </div>
+
           {/* 2. Cinematic Hero Banner */}
           {featuredChannel && (
             <div

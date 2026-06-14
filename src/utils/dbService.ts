@@ -3,6 +3,7 @@ import {
   getDocs,
   setDoc,
   doc,
+  getDoc,
   query,
   where,
   deleteDoc,
@@ -15,6 +16,32 @@ import {
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Channel, Category, Favorite, WatchHistory } from "../types";
 import { DEFAULT_CHANNELS } from "./m3uParser";
+
+// --- SEED CONTROL ACCESSORS ---
+
+export async function setSeedStatus(disabled: boolean): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, "system", "settings"),
+      { autoSeedDisabled: disabled },
+      { merge: true }
+    );
+  } catch (err) {
+    // Suppress config write errors
+  }
+}
+
+export async function isSeedDisabledCheck(): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, "system", "settings"));
+    if (snap.exists()) {
+      return snap.data()?.autoSeedDisabled === true;
+    }
+  } catch (err) {
+    // Suppress config retrieval errors
+  }
+  return false;
+}
 
 // --- CHANNELS & CATEGORIES ---
 
