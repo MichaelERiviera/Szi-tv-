@@ -69,6 +69,15 @@ interface SystemSettingsModel {
   featuredChannelId?: string;
 }
 
+interface ConfirmationModal {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  isDangerous?: boolean;
+  onConfirm: () => void | Promise<void>;
+}
+
 export default function AdminScreen({
   channels,
   onAddChannel,
@@ -79,6 +88,10 @@ export default function AdminScreen({
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "channels" | "monitor" | "users" | "analytics" | "content" | "security" | "settings"
   >("dashboard");
+
+  // Premium Custom Confirmation Modal States
+  const [confirmModal, setConfirmModal] = useState<ConfirmationModal | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Database Synced Records
   const [realUsers, setRealUsers] = useState<UserProfile[]>([]);
@@ -481,19 +494,20 @@ export default function AdminScreen({
   };
 
   // 5. USER PERSISTENT STORAGE CONTROLS (Ban & Delete)
-  const handleDeleteUserProfile = async (userId: string) => {
+  const handleDeleteUserProfile = (userId: string) => {
     if (userId === "current-user") return; // Safety block
-    if (!window.confirm("Are you absolutely sure you want to delete this subscriber profile from the cloud database? All watch histories will be purged.")) {
-      return;
-    }
-
-    try {
-      await deleteDoc(doc(db, "users", userId));
-      setRealUsers((prev) => prev.filter((u) => u.id !== userId));
-      logEvent("warn", `Subscriber profile ID ${userId} deleted by administrator.`);
-    } catch (err: any) {
-      logEvent("error", `Failure deleting subscriber: ${err.message}`);
-    }
+    setConfirmModal({
+      title: "Delete Subscriber Profile",
+      message: "Are you absolutely sure you want to delete this subscriber profile from the cloud database? This will completely purge all watch history and credentials. This action is irreversible.",
+      confirmLabel: "Delete User Profile",
+      cancelLabel: "Cancel",
+      isDangerous: true,
+      onConfirm: async () => {
+        await deleteDoc(doc(db, "users", userId));
+        setRealUsers((prev) => prev.filter((u) => u.id !== userId));
+        logEvent("warn", `Subscriber profile ID ${userId} deleted by administrator.`);
+      }
+    });
   };
 
   const handleToggleBanUser = async (userId: string) => {
@@ -553,16 +567,19 @@ export default function AdminScreen({
     }
   };
 
-  const handleDeleteCategory = async (catId: string, name: string) => {
-    if (!window.confirm(`Delete the "${name}" category?`)) return;
-
-    try {
-      await deleteDoc(doc(db, "categories", catId));
-      setDbCategories((prev) => prev.filter((c) => c.id !== catId));
-      logEvent("warn", `Category genre "${name}" decommissioned.`);
-    } catch (err: any) {
-      logEvent("error", `Failed category deletion: ${err.message}`);
-    }
+  const handleDeleteCategory = (catId: string, name: string) => {
+    setConfirmModal({
+      title: "Decommission Category Genre",
+      message: `Are you sure you want to delete and decommission the category "${name}"? Standard channels tagged under this category may become unsorted.`,
+      confirmLabel: "Decommission Category",
+      cancelLabel: "Keep Category",
+      isDangerous: true,
+      onConfirm: async () => {
+        await deleteDoc(doc(db, "categories", catId));
+        setDbCategories((prev) => prev.filter((c) => c.id !== catId));
+        logEvent("warn", `Category genre "${name}" decommissioned.`);
+      }
+    });
   };
 
   // 7. CONTENT HERO BANNER & FRONTEND SECTIONS CONTROLLER
@@ -628,32 +645,38 @@ export default function AdminScreen({
     }
   };
 
-  const handleBulkDecommissionChannels = async () => {
+  const handleBulkDecommissionChannels = () => {
     if (selectedChannels.length === 0) return;
-    if (!window.confirm(`Bulk ban & decommission ${selectedChannels.length} streams?`)) return;
-
-    try {
-      const idsToDelete = [...selectedChannels];
-      await onDeleteChannel(idsToDelete);
-      setSelectedChannels([]);
-      logEvent("warn", `Bulk deleted ${idsToDelete.length} transmission beacons from catalog.`);
-    } catch (err: any) {
-      logEvent("error", `Failed complete bulk deletion: ${err.message}`);
-    }
+    setConfirmModal({
+      title: "Bulk Decommission Confirmation",
+      message: `Are you sure you want to permanently delete and decommission these ${selectedChannels.length} selected HLS streams from the active catalog? This action cannot be undone.`,
+      confirmLabel: `Delete ${selectedChannels.length} Streams`,
+      cancelLabel: "Cancel",
+      isDangerous: true,
+      onConfirm: async () => {
+        const idsToDelete = [...selectedChannels];
+        await onDeleteChannel(idsToDelete);
+        setSelectedChannels([]);
+        logEvent("warn", `Bulk deleted ${idsToDelete.length} HLS feeds from catalog.`);
+      }
+    });
   };
 
-  const handlePurgeAllChannels = async () => {
+  const handlePurgeAllChannels = () => {
     if (channels.length === 0) return;
-    if (!window.confirm("Are you sure you want to delete all channels immediately?")) return;
-
-    try {
-      const allIds = channels.map((c) => c.id);
-      await onDeleteChannel(allIds);
-      setSelectedChannels([]);
-      logEvent("warn", `COMPLETE PURGE: Cleaned out all ${allIds.length} channels from active database.`);
-    } catch (err: any) {
-      logEvent("error", `Failed complete system purge: ${err.message}`);
-    }
+    setConfirmModal({
+      title: "⚠️ CRITICAL SYSTEM PURGE ⚠️",
+      message: `Are you absolutely certain you want to completely purge and delete ALL ${channels.length} channels currently registered in Sazi TV deep database? This action is IRREVERSIBLE and cannot be undone.`,
+      confirmLabel: "One-Click Clear Database",
+      cancelLabel: "Abort",
+      isDangerous: true,
+      onConfirm: async () => {
+        const allIds = channels.map((c) => c.id);
+        await onDeleteChannel(allIds);
+        setSelectedChannels([]);
+        logEvent("warn", `COMPLETE PURGE: Cleaned out all ${allIds.length} channels from active database.`);
+      }
+    });
   };
 
   const handleBulkProbeSelected = async () => {
@@ -2097,6 +2120,88 @@ export default function AdminScreen({
               </div>
             )}
           </motion.div>
+        </AnimatePresence>
+
+        {/* Global Premium Confirmation Modal */}
+        <AnimatePresence>
+          {confirmModal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  if (!confirmLoading) setConfirmModal(null);
+                }}
+                className="absolute inset-0 bg-[#020211]/85 backdrop-blur-md"
+              />
+
+              {/* Box */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ type: "spring", duration: 0.4 }}
+                className="relative w-full max-w-md bg-[#0a0b1c] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl p-6 select-none"
+              >
+                {/* Header Pattern */}
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-rose-500 via-purple-500 to-cyan-500" />
+
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-xl shrink-0 ${confirmModal.isDangerous ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
+                    <ShieldAlert size={24} className="animate-pulse" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <h3 className="text-sm font-bold font-mono tracking-wide text-slate-100 uppercase">
+                      {confirmModal.title}
+                    </h3>
+                    <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                      {confirmModal.message}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3 font-mono text-xs">
+                  <button
+                    disabled={confirmLoading}
+                    onClick={() => setConfirmModal(null)}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-all font-medium disabled:opacity-50"
+                  >
+                    {confirmModal.cancelLabel}
+                  </button>
+                  <button
+                    disabled={confirmLoading}
+                    onClick={async () => {
+                      setConfirmLoading(true);
+                      try {
+                        await confirmModal.onConfirm();
+                      } catch (err: any) {
+                        logEvent("error", `Modal execution failure: ${err.message}`);
+                      } finally {
+                        setConfirmLoading(false);
+                        setConfirmModal(null);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg font-bold text-slate-950 transition-all focus:ring-2 flex items-center justify-center gap-1.5 ${
+                      confirmModal.isDangerous
+                        ? "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 shadow-md shadow-red-950/20"
+                        : "bg-gradient-to-r from-cyan-400 to-teal-500 hover:from-cyan-300 hover:to-teal-400 shadow-md shadow-cyan-950/20"
+                    }`}
+                  >
+                    {confirmLoading ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        PROCESSING...
+                      </>
+                    ) : (
+                      confirmModal.confirmLabel
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
         </AnimatePresence>
       </div>
     </div>
