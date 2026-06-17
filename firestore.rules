@@ -43,12 +43,13 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'email', 'displayName', 'createdAt', 'role']) &&
-             data.keys().size() == 5 &&
+             data.keys().size() >= 5 && data.keys().size() <= 6 &&
              data.id is string && data.id.size() <= 128 &&
              data.email is string && data.email.size() <= 256 &&
              data.displayName is string && data.displayName.size() <= 128 &&
              data.role is string && (data.role == 'user' || data.role == 'admin') &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('avatarId' in data) || (data.avatarId is string && data.avatarId.size() <= 128));
     }
 
     function isValidChannel(data) {
@@ -60,7 +61,11 @@ service cloud.firestore {
              data.addedAt is timestamp &&
              (!('logo' in data) || data.logo is string) &&
              (!('views' in data) || data.views is int) &&
-             (!('status' in data) || data.status is string);
+             (!('status' in data) || data.status is string) &&
+             (!('logoStatus' in data) || (data.logoStatus is string && data.logoStatus.size() <= 64)) &&
+             (!('logoSource' in data) || (data.logoSource is string && data.logoSource.size() <= 64)) &&
+             (!('logoLastChecked' in data) || (data.logoLastChecked is string && data.logoLastChecked.size() <= 128)) &&
+             (!('cachedLogoUrl' in data) || (data.cachedLogoUrl is string && data.cachedLogoUrl.size() <= 2048));
     }
 
     function isValidCategory(data) {
@@ -90,6 +95,20 @@ service cloud.firestore {
              (!('duration' in data) || data.duration is int);
     }
 
+    function isValidImport(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'fileName', 'fileType', 'totalChannels', 'importedCount', 'failedCount', 'status', 'errors', 'importedIds']) &&
+             data.id is string && data.id.size() <= 256 &&
+             data.fileName is string && data.fileName.size() <= 512 &&
+             data.fileType is string && data.fileType.size() <= 64 &&
+             data.totalChannels is int &&
+             data.importedCount is int &&
+             data.failedCount is int &&
+             data.status is string && data.status.size() <= 64 &&
+             data.errors is list &&
+             data.importedIds is list &&
+             data.timestamp is timestamp;
+    }
+
 
     // --- COLLECTIONS SECURITY MATCH BLOCKS ---
 
@@ -112,7 +131,7 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidChannel(incoming()) && incoming().addedAt == request.time;
       allow update: if (isAdmin() && isValidChannel(incoming()) && (incoming().addedAt == existing().addedAt || incoming().addedAt == request.time)) || (
         // Allow public visitors to increment views counter via specific action
-        isSignedIn() && isValidChannel(incoming()) && 
+        isValidChannel(incoming()) && 
         incoming().diff(existing()).affectedKeys().hasOnly(['views'])
       );
       allow delete: if isAdmin();
@@ -152,6 +171,14 @@ service cloud.firestore {
     match /system/settings {
       allow read: if true; // Let users check active system setting configs
       allow write: if isAdmin();
+    }
+
+    // 8. Playlist Imports Collection (Admin managed)
+    match /imports/{importId} {
+      allow read, list: if isAdmin();
+      allow create: if isAdmin() && isValidImport(incoming()) && incoming().timestamp == request.time;
+      allow update: if isAdmin() && isValidImport(incoming()) && (incoming().timestamp == existing().timestamp || incoming().timestamp == request.time);
+      allow delete: if isAdmin();
     }
   }
 }

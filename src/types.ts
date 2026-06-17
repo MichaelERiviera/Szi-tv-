@@ -4,6 +4,7 @@ export interface UserProfile {
   displayName: string;
   createdAt: any; // Firestore Timestamp
   role: "user" | "admin";
+  avatarId?: string; // Selected cyberpunk pilot icon ID
 }
 
 export interface Channel {
@@ -15,6 +16,12 @@ export interface Channel {
   addedAt: any; // Firestore Timestamp
   views?: number;
   status?: "active" | "broken";
+  avgRating?: number;
+  ratingCount?: number;
+  logoStatus?: "missing" | "active" | "broken" | "cached";
+  logoSource?: "m3u" | "recovered" | "fallback" | "manual";
+  logoLastChecked?: string;
+  cachedLogoUrl?: string;
 }
 
 export interface Category {
@@ -35,8 +42,40 @@ export interface WatchHistory {
   userId: string;
   channelId: string;
   watchedAt: any; // Firestore Timestamp
-  progress?: number;
-  duration?: number;
+  progress?: number; // percentage completed e.g. 0 to 100
+  duration?: number; // total seconds watched
+  completed?: boolean;
+}
+
+export interface ChannelRating {
+  id: string;
+  userId: string;
+  channelId: string;
+  rating: number; // 1 to 5
+  comment?: string;
+  timestamp: any;
+}
+
+export interface ChannelRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  channelName: string;
+  category: string;
+  streamUrl?: string;
+  status: "pending" | "investigating" | "approved" | "rejected";
+  timestamp: any;
+}
+
+export interface BrokenReport {
+  id: string;
+  userId: string;
+  channelId: string;
+  channelName: string;
+  issueType: "no-signal" | "lagging" | "audio-only" | "wrong-channel" | "other";
+  description?: string;
+  status: "open" | "investigating" | "aligned";
+  timestamp: any;
 }
 
 export interface SystemSettings {

@@ -118,6 +118,55 @@ export async function seedChannels(channels: Channel[]): Promise<void> {
   }
 }
 
+// --- PLAYLIST IMPORTS SERVICES ---
+
+export interface ImportHistoryItem {
+  id: string;
+  timestamp: any;
+  fileName: string;
+  fileType: string;
+  totalChannels: number;
+  importedCount: number;
+  failedCount: number;
+  status: "success" | "partial" | "failed" | "processing";
+  errors: string[];
+  importedIds: string[];
+}
+
+export async function fetchImports(): Promise<ImportHistoryItem[]> {
+  try {
+    const q = query(collection(db, "imports"), orderBy("timestamp", "desc"), limit(100));
+    const snap = await getDocs(q);
+    const list: ImportHistoryItem[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as ImportHistoryItem);
+    });
+    return list;
+  } catch (err) {
+    console.error("Failed to query import logs:", err);
+    return [];
+  }
+}
+
+export async function saveImport(batch: ImportHistoryItem): Promise<void> {
+  try {
+    await setDoc(doc(db, "imports", batch.id), {
+      ...batch,
+      timestamp: serverTimestamp(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `imports/${batch.id}`);
+  }
+}
+
+export async function deleteImportLog(batchId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "imports", batchId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `imports/${batchId}`);
+  }
+}
+
 // --- FAVORITES ---
 
 export async function fetchUserFavorites(userId: string): Promise<Favorite[]> {
@@ -217,5 +266,161 @@ export async function logWatchSession(
     });
   } catch (err) {
     // Fail silently so stream is uninterrupted
+  }
+}
+
+// --- RATINGS, REQUESTS, BROKEN REPORTS & AVATARS ---
+
+import { ChannelRating, ChannelRequest, BrokenReport } from "../types";
+
+export async function fetchChannelRatings(channelId: string): Promise<ChannelRating[]> {
+  try {
+    const q = query(
+      collection(db, `channels/${channelId}/ratings`),
+      orderBy("timestamp", "desc")
+    );
+    const snap = await getDocs(q);
+    const list: ChannelRating[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as ChannelRating);
+    });
+    return list;
+  } catch (err) {
+    console.warn("Could not query ratings:", err);
+    return [];
+  }
+}
+
+export async function submitChannelRating(
+  userId: string,
+  channelId: string,
+  rating: number,
+  comment = ""
+): Promise<void> {
+  const rId = `${userId}-${channelId}`.replace(/[^a-zA-Z0-9-]/g, "");
+  const rRef = doc(db, `channels/${channelId}/ratings`, rId);
+  try {
+    await setDoc(rRef, {
+      id: rId,
+      userId,
+      channelId,
+      rating,
+      comment,
+      timestamp: serverTimestamp(),
+    });
+
+    // Update averages in channel record safely with merge
+    const chanRef = doc(db, "channels", channelId);
+    await setDoc(
+      chanRef,
+      {
+        avgRating: rating, // Approximate or increment average
+        ratingCount: increment(1),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("Failed to persist rating:", err);
+  }
+}
+
+export async function fetchChannelRequests(): Promise<ChannelRequest[]> {
+  try {
+    const q = query(collection(db, "channelRequests"), orderBy("timestamp", "desc"));
+    const snap = await getDocs(q);
+    const list: ChannelRequest[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as ChannelRequest);
+    });
+    return list;
+  } catch (err) {
+    console.warn("Requests read fallback active:", err);
+    return [];
+  }
+}
+
+export async function submitChannelRequest(
+  userId: string,
+  userName: string,
+  channelName: string,
+  category: string,
+  streamUrl = ""
+): Promise<void> {
+  const reqId = `req-${Date.now()}`;
+  const dRef = doc(db, "channelRequests", reqId);
+  try {
+    const payload: ChannelRequest = {
+      id: reqId,
+      userId,
+      userName,
+      channelName,
+      category,
+      streamUrl,
+      status: "pending",
+      timestamp: new Date(),
+    };
+    await setDoc(dRef, {
+      ...payload,
+      timestamp: serverTimestamp(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `channelRequests/${reqId}`);
+  }
+}
+
+export async function fetchBrokenReports(): Promise<BrokenReport[]> {
+  try {
+    const q = query(collection(db, "brokenReports"), orderBy("timestamp", "desc"));
+    const snap = await getDocs(q);
+    const list: BrokenReport[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as BrokenReport);
+    });
+    return list;
+  } catch (err) {
+    console.warn("Reports read fallback active:", err);
+    return [];
+  }
+}
+
+export async function submitBrokenReport(
+  userId: string,
+  channelId: string,
+  channelName: string,
+  issueType: BrokenReport["issueType"],
+  description = ""
+): Promise<void> {
+  const repId = `rep-${Date.now()}`;
+  const dRef = doc(db, "brokenReports", repId);
+  try {
+    const payload: BrokenReport = {
+      id: repId,
+      userId,
+      channelId,
+      channelName,
+      issueType,
+      description,
+      status: "open",
+      timestamp: new Date(),
+    };
+    await setDoc(dRef, {
+      ...payload,
+      timestamp: serverTimestamp(),
+    });
+
+    // Mark channel as broken temporarily if multiple reports or simply track status
+    const chanRef = doc(db, "channels", channelId);
+    await setDoc(chanRef, { status: "broken" }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `brokenReports/${repId}`);
+  }
+}
+
+export async function updateUserProfileAvatar(userId: string, avatarId: string): Promise<void> {
+  try {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { avatarId });
+  } catch (err) {
+    console.error("Could not update avatar selection:", err);
   }
 }

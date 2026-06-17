@@ -9,7 +9,8 @@
         "email": { "type": "string", "description": "Email address" },
         "displayName": { "type": "string", "description": "Display name" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Account creation time" },
-        "role": { "type": "string", "enum": ["user", "admin"], "description": "Access level role" }
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "Access level role" },
+        "avatarId": { "type": "string", "description": "Selected cyberpunk pilot icon ID" }
       },
       "required": ["id", "email", "displayName", "createdAt", "role"]
     },
@@ -25,7 +26,11 @@
         "category": { "type": "string", "description": "Category name for filtering" },
         "addedAt": { "type": "string", "format": "date-time" },
         "views": { "type": "integer" },
-        "status": { "type": "string", "enum": ["active", "broken"] }
+        "status": { "type": "string", "enum": ["active", "broken"] },
+        "logoStatus": { "type": "string", "enum": ["missing", "active", "broken", "cached"], "description": "Status of the logo image asset" },
+        "logoSource": { "type": "string", "enum": ["m3u", "recovered", "fallback", "manual"], "description": "Origin where the logo image was solved" },
+        "logoLastChecked": { "type": "string", "format": "date-time", "description": "RFC3339 timestamp of the last logo diagnostics check" },
+        "cachedLogoUrl": { "type": "string", "description": "Cloud replica URL of the downloaded and optimized logo image" }
       },
       "required": ["id", "name", "url", "category", "addedAt"]
     },
@@ -87,6 +92,24 @@
         "lastValidatedAt": { "type": "string" }
       },
       "required": ["activeM3uUrl", "autoValidateStreams"]
+    },
+    "ImportBatch": {
+      "title": "ImportBatch",
+      "description": "Historical log of uploaded playlists with success, logs, and targeted deletion handles.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique batch ID" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" },
+        "totalChannels": { "type": "integer" },
+        "importedCount": { "type": "integer" },
+        "failedCount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["success", "partial", "failed", "processing"] },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "importedIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "timestamp", "fileName", "fileType", "totalChannels", "importedCount", "failedCount", "status", "errors", "importedIds"]
     }
   },
   "firestore": {
@@ -117,6 +140,10 @@
     "/system/settings": {
       "schema": { "$ref": "#/entities/SystemSetting" },
       "description": "Global system configurations."
+    },
+    "/imports/{importId}": {
+      "schema": { "$ref": "#/entities/ImportBatch" },
+      "description": "Historical log of playlist import runs and error states."
     }
   }
 }

@@ -1,10 +1,21 @@
 import { useState, FormEvent, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle2, Tv, Satellite } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle2, Tv, X } from "lucide-react";
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  onClose?: () => void;
+  initialTab?: "login" | "register" | "forgot";
+  isModal?: boolean;
+}
+
+export default function LoginScreen({ onClose, initialTab = "login", isModal = false }: LoginScreenProps) {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
-  const [activeTab, setActiveTab] = useState<"login" | "register" | "forgot">("login");
+  const [activeTab, setActiveTab] = useState<"login" | "register" | "forgot">(initialTab);
+
+  // Sync tab with initialTab prop if it changes
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Input states
   const [email, setEmail] = useState("");
@@ -50,6 +61,7 @@ export default function LoginScreen() {
         localStorage.removeItem("sazi_tv_saved_email");
       }
       await signInWithEmail(email.trim(), password);
+      onClose?.();
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Invalid email or password. Please try again.");
@@ -85,6 +97,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signUpWithEmail(trimmedEmail, password, trimmedName);
+      onClose?.();
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Registration failed. This email may be taken.");
@@ -119,6 +132,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithGoogle();
+      onClose?.();
     } catch (err: any) {
       console.error("OAuth error:", err);
       if (err.message?.includes("popup-closed-by-user") || err.code === "auth/popup-closed-by-user") {
@@ -137,13 +151,29 @@ export default function LoginScreen() {
     }
   };
 
+  const isCancellable = !!onClose;
+
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4 relative z-10 font-sans">
+    <div className={isModal ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#04040a]/85 backdrop-blur-md font-sans" : "min-h-[85vh] flex items-center justify-center p-4 relative z-10 font-sans"}>
+      {isModal && <div className="absolute inset-0 cursor-default" onClick={onClose} />}
+      
       {/* Background soft ambient neon blur glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
+      {!isModal && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
+      )}
 
       {/* Premium Minimal Container Card */}
-      <div className="w-full max-w-md bg-[#08080c]/90 border border-cyan-500/10 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+      <div className="w-full max-w-md bg-[#08080c]/95 border border-cyan-500/20 rounded-2xl p-8 shadow-2xl relative overflow-hidden z-10 animate-in fade-in zoom-in duration-200">
+        {isCancellable && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors p-1.5 hover:bg-zinc-850 rounded-lg cursor-pointer z-50"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        )}
         {/* Neon blue top accent line */}
         <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-blue-500 to-cyan-400" />
 

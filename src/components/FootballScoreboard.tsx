@@ -230,7 +230,7 @@ export default function FootballScoreboard() {
     try {
       // Build fetch request with CORS bypass proxy if requested
       const requestUrl = useProxy 
-        ? `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
+        ? `/api/proxy?url=${encodeURIComponent(targetUrl)}`
         : targetUrl;
 
       const headers: Record<string, string> = {

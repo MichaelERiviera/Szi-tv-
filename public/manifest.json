@@ -1,0 +1,21 @@
+{
+  "name": "Sazi TV",
+  "short_name": "Sazi TV",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b1c",
+  "theme_color": "#a855f7",
+  "description": "IPTV Cyber Observatory - A futuristic space-inspired IPTV streaming platform with advanced playlist management.",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=192&h=192&fit=crop",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=512&h=512&fit=crop",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
